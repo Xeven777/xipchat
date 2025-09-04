@@ -2,138 +2,142 @@ name: Build and Release Chrome Extension
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
-        
-    - name: Install dependencies
-      run: npm ci
-      
-    - name: Run type checking
-      run: npm run check
-      
-    - name: Build extension
-      run: npm run build
-      
-    - name: Create extension package
-      run: |
-        # Create a clean directory for the extension
-        mkdir -p extension-package
-        
-        # Copy built files
-        cp -r dist/* extension-package/
-        
-        # Copy manifest and icons
-        cp public/manifest.json extension-package/
-        cp -r public/icons extension-package/
-        
-        # Create zip file for Chrome Web Store
-        cd extension-package
-        zip -r ../xipchat-extension.zip .
-        cd ..
-        
-        # Create tar.gz for GitHub release
-        tar -czf xipchat-extension.tar.gz -C extension-package .
-        
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: extension-build
-        path: |
-          xipchat-extension.zip
-          xipchat-extension.tar.gz
-          extension-package/
-        retention-days: 30
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run type checking
+        run: bun run check
+
+      - name: Build extension
+        run: bun run build
+
+      - name: Create extension package
+        run: |
+          # Create a clean directory for the extension
+          mkdir -p extension-package
+
+          # Copy built files
+          cp -r dist/* extension-package/
+
+          # Copy manifest and icons
+          cp public/manifest.json extension-package/
+          cp -r public/icons extension-package/
+
+          # Create zip file for Chrome Web Store
+          cd extension-package
+          zip -r ../xipchat-extension.zip .
+          cd ..
+
+          # Create tar.gz for GitHub release
+          tar -czf xipchat-extension.tar.gz -C extension-package .
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-build
+          path: |
+            xipchat-extension.zip
+            xipchat-extension.tar.gz
+            extension-package/
+          retention-days: 30
 
   release:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Download build artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: extension-build
-        
-    - name: Get version from manifest
-      id: version
-      run: |
-        VERSION=$(node -p "require('./public/manifest.json').version")
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
-        echo "tag=v$VERSION" >> $GITHUB_OUTPUT
-        
-    - name: Get commit info
-      id: commit
-      run: |
-        COMMIT_MSG=$(git log -1 --pretty=%B)
-        COMMIT_SHA=$(git rev-parse --short HEAD)
-        echo "message=$COMMIT_MSG" >> $GITHUB_OUTPUT
-        echo "sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
-        
-    - name: Check if tag exists
-      id: tag_check
-      run: |
-        if git rev-parse "v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
-          echo "exists=true" >> $GITHUB_OUTPUT
-        else
-          echo "exists=false" >> $GITHUB_OUTPUT
-        fi
-        
-    - name: Create or update release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ steps.version.outputs.tag }}
-        name: "XipChat v${{ steps.version.outputs.version }}"
-        body: |
-          ## XipChat Chrome Extension v${{ steps.version.outputs.version }}
-          
-          ### 🚀 What's New
-          ${{ steps.commit.outputs.message }}
-          
-          ### 📦 Installation
-          1. Download `xipchat-extension.zip` from the assets below
-          2. Extract the zip file
-          3. Open Chrome and go to `chrome://extensions/`
-          4. Enable "Developer mode" in the top right
-          5. Click "Load unpacked" and select the extracted folder
-          6. The XipChat extension should now appear in your extensions
-          
-          ### 🔧 Features
-          - 📸 Full page & region screenshots
-          - 🔄 Batch image processing  
-          - 🌐 Automatic page context
-          - 📝 Clean text responses (no markdown formatting)
-          - ⚡ Fast AI inference with Groq
-          
-          ### 📋 Requirements
-          - Chrome browser (version 88+)
-          - Groq API key (get one at https://groq.com)
-          
-          ---
-          **Build Info:** Commit ${{ steps.commit.outputs.sha }} | Built on $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-        files: |
-          xipchat-extension.zip
-          xipchat-extension.tar.gz
-        draft: false
-        prerelease: false
-        make_latest: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: extension-build
+
+      - name: Setup Bun (for version extraction)
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Get version from manifest
+        id: version
+        run: |
+          VERSION=$(bun --print "require('./public/manifest.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Get commit info
+        id: commit
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          COMMIT_SHA=$(git rev-parse --short HEAD)
+          echo "message=$COMMIT_MSG" >> $GITHUB_OUTPUT
+          echo "sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+
+      - name: Check if tag exists
+        id: tag_check
+        run: |
+          if git rev-parse "v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "XipChat v${{ steps.version.outputs.version }}"
+          body: |
+            ## XipChat Chrome Extension v${{ steps.version.outputs.version }}
+
+            ### 🚀 What's New
+            ${{ steps.commit.outputs.message }}
+
+            ### 📦 Installation
+            1. Download `xipchat-extension.zip` from the assets below
+            2. Extract the zip file
+            3. Open Chrome and go to `chrome://extensions/`
+            4. Enable "Developer mode" in the top right
+            5. Click "Load unpacked" and select the extracted folder
+            6. The XipChat extension should now appear in your extensions
+
+            ### 🔧 Features
+            - 📸 Full page & region screenshots
+            - 🔄 Batch image processing  
+            - 🌐 Automatic page context
+            - 📝 Clean text responses (no markdown formatting)
+            - ⚡ Fast AI inference with Groq
+
+            ### 📋 Requirements
+            - Chrome browser (version 88+)
+            - Groq API key (get one at https://groq.com)
+
+            ---
+            **Build Info:** Commit ${{ steps.commit.outputs.sha }} | Built on $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          files: |
+            xipchat-extension.zip
+            xipchat-extension.tar.gz
+          draft: false
+          prerelease: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

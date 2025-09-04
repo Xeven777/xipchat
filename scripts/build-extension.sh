@@ -46,15 +46,15 @@ rm -f xipchat-extension.tar.gz
 
 # Install dependencies
 print_status "Installing dependencies..."
-npm ci
+bun install --frozen-lockfile
 
 # Run type checking
 print_status "Running type checks..."
-npm run check
+bun run check
 
 # Build the extension
 print_status "Building extension..."
-npm run build
+bun run build
 
 # Create extension package directory
 print_status "Creating extension package..."
@@ -70,7 +70,7 @@ cp public/manifest.json extension-package/
 cp -r public/icons extension-package/
 
 # Get version from manifest
-VERSION=$(node -p "require('./public/manifest.json').version")
+VERSION=$(bun --print "require('./public/manifest.json').version")
 print_status "Extension version: $VERSION"
 
 # Create zip file for Chrome Web Store

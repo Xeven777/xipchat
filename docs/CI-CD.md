@@ -7,18 +7,21 @@ This document describes the automated build and release process for the XipChat 
 ### 1. Build and Release Workflow (`.github/workflows/build-and-release.yml`)
 
 **Triggers:**
+
 - Every push to `main` branch
 - Pull requests to `main` branch
 
 **What it does:**
-- ✅ Installs dependencies
-- ✅ Runs type checking (`npm run check`)
-- ✅ Builds the extension (`npm run build`)
+
+- ✅ Installs dependencies with Bun
+- ✅ Runs type checking (`bun run check`)
+- ✅ Builds the extension (`bun run build`)
 - ✅ Packages the extension into zip and tar.gz files
 - ✅ Creates GitHub releases automatically (only on main branch pushes)
 - ✅ Uploads build artifacts
 
 **Outputs:**
+
 - `xipchat-extension.zip` - Ready for Chrome Web Store
 - `xipchat-extension.tar.gz` - Alternative distribution format
 - `extension-package/` - Unpacked extension directory
@@ -26,17 +29,20 @@ This document describes the automated build and release process for the XipChat 
 ### 2. Version Bump Workflow (`.github/workflows/version-bump.yml`)
 
 **Triggers:**
+
 - Manual workflow dispatch from GitHub Actions tab
 
 **What it does:**
-- ✅ Bumps version in `package.json` and `public/manifest.json`
+
+- ✅ Bumps version in `package.json` and `public/manifest.json` using Bun
 - ✅ Creates a git tag
 - ✅ Pushes changes to main branch
 - ✅ Triggers the build and release workflow automatically
 
 **Options:**
+
 - `patch` - 1.0.0 → 1.0.1
-- `minor` - 1.0.0 → 1.1.0  
+- `minor` - 1.0.0 → 1.1.0
 - `major` - 1.0.0 → 2.0.0
 - `custom` - Specify exact version
 
@@ -49,14 +55,15 @@ This document describes the automated build and release process for the XipChat 
 chmod +x scripts/build-extension.sh
 
 # Build the extension locally
-npm run build:extension
+bun run build:extension
 # or
 ./scripts/build-extension.sh
 ```
 
 **What it does:**
+
 - Cleans previous builds
-- Installs dependencies
+- Installs dependencies with Bun
 - Runs type checking
 - Builds the extension
 - Creates distribution packages
@@ -79,17 +86,19 @@ npm run build:extension
 ### Manual Releases
 
 1. **Update version** in both files:
+
    ```bash
-   # Update package.json
-   npm version patch  # or minor/major
-   
+   # Update package.json using Bun
+   bun run version:patch  # or version:minor/version:major
+
    # Update public/manifest.json manually
    # Change the "version" field to match package.json
    ```
 
 2. **Commit and push**:
+
    ```bash
-   git add package.json package-lock.json public/manifest.json
+   git add package.json bun.lock public/manifest.json
    git commit -m "🔖 Bump version to v1.0.1"
    git tag v1.0.1
    git push origin main
@@ -102,21 +111,21 @@ npm run build:extension
 
 ```bash
 # Development
-npm run dev              # Start development server
-npm run preview          # Preview built extension
+bun run dev              # Start development server
+bun run preview          # Preview built extension
 
 # Building
-npm run build            # Build extension (Vite)
-npm run build:extension  # Build and package extension
-npm run package          # Full build and package
+bun run build            # Build extension (Vite)
+bun run build:extension  # Build and package extension
+bun run package          # Full build and package
 
 # Type checking
-npm run check            # Run Svelte type checking
+bun run check            # Run Svelte type checking
 
 # Version management
-npm run version:patch    # Bump patch version (local only)
-npm run version:minor    # Bump minor version (local only)
-npm run version:major    # Bump major version (local only)
+bun run version:patch    # Bump patch version (local only)
+bun run version:minor    # Bump minor version (local only)
+bun run version:major    # Bump major version (local only)
 ```
 
 ## 🔧 Configuration
@@ -128,6 +137,7 @@ No additional secrets are required. The workflows use the default `GITHUB_TOKEN`
 ### Workflow Permissions
 
 The workflows need the following permissions (automatically granted):
+
 - `contents: write` - To create releases and push tags
 - `actions: read` - To download artifacts
 
@@ -148,9 +158,9 @@ docs/
 
 ### Build Fails
 
-1. **Check dependencies**: Ensure all dependencies are properly installed
-2. **Type errors**: Run `npm run check` locally to catch TypeScript issues
-3. **Build errors**: Run `npm run build` locally to test the build process
+1. **Check dependencies**: Ensure all dependencies are properly installed with `bun install`
+2. **Type errors**: Run `bun run check` locally to catch TypeScript issues
+3. **Build errors**: Run `bun run build` locally to test the build process
 
 ### Release Not Created
 

@@ -8,10 +8,10 @@
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "build:extension": "./scripts/build-extension.sh",
-    "package": "npm run build && ./scripts/build-extension.sh",
-    "version:patch": "npm version patch --no-git-tag-version",
-    "version:minor": "npm version minor --no-git-tag-version",
-    "version:major": "npm version major --no-git-tag-version"
+    "package": "bun run build && ./scripts/build-extension.sh",
+    "version:patch": "bun version patch --no-git-tag-version",
+    "version:minor": "bun version minor --no-git-tag-version",
+    "version:major": "bun version major --no-git-tag-version"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^6.1.4",
