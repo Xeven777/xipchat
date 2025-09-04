@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { settings } from '../stores/settings';
   import { sendChatRequest, type Message } from '../services/groq';
+  import MarkdownRenderer from './MarkdownRenderer.svelte';
+  import { keyboardShortcuts, DEFAULT_SHORTCUTS, type ShortcutAction } from '../services/keyboardShortcuts';
 
   // Define content part types
   type TextContent = {
@@ -48,7 +50,7 @@
   // Type declaration for global chrome variable
   const chrome = (window as any).chrome as Chrome;
   
-  // Crop area type
+  // Crop area type with enhanced page context
   interface CropArea {
     x: number;
     y: number;
@@ -57,6 +59,13 @@
     dpr: number;
     pageUrl?: string;
     pageDomain?: string;
+    pageTitle?: string;
+    pageDescription?: string;
+    timestamp?: number;
+    viewport?: {
+      width: number;
+      height: number;
+    };
   }
 
   let message = $state("");
@@ -70,6 +79,17 @@
   let attachedImage = $state<string | null>(null);
   let isHoveringAttachedImage = $state(false);
   let cropAreaInfo = $state<CropArea | null>(null);
+  let messageInput: HTMLInputElement | null = null;
+
+  // Batch processing state
+  interface BatchImage {
+    id: string;
+    imageData: string;
+    cropArea: CropArea;
+  }
+
+  let batchImages = $state<BatchImage[]>([]);
+  let isBatchMode = $state(false);
 
   async function sendMessage() {
     if (message.trim() || attachedImage) {
@@ -154,15 +174,25 @@
       }
       
       try {
-        // Execute a function directly in the tab context
+        // Execute a function directly in the tab context to gather page information
         const results = await chrome.scripting.executeScript({
           target: {tabId: activeTab.id},
           func: () => {
+            // Get page metadata
+            const getMetaContent = (name: string): string => {
+              const meta = document.querySelector(`meta[name="${name}"], meta[property="${name}"], meta[property="og:${name}"]`);
+              return meta?.getAttribute('content') || '';
+            };
+
             return {
               width: window.innerWidth,
               height: window.innerHeight,
               dpr: window.devicePixelRatio || 1,
-              url: window.location.href
+              url: window.location.href,
+              title: document.title,
+              description: getMetaContent('description'),
+              domain: window.location.hostname,
+              timestamp: Date.now()
             };
           }
         });
@@ -171,30 +201,43 @@
           errorMessage = "Could not get tab dimensions";
           return;
         }
-        
-        const dimensions = results[0].result;
-        
+
+        const pageInfo = results[0].result;
+
         // Now capture the full tab
         chrome.tabs.captureVisibleTab(null, {format: 'png'}, function(dataUrl) {
           if (chrome.runtime.lastError) {
             errorMessage = `Screenshot error: ${chrome.runtime.lastError.message}`;
             return;
           }
-          
-          // Store the screenshot and crop info without displaying a prompt
-          const fullCropArea = {
+
+          // Store the screenshot and crop info with enhanced page context
+          const fullCropArea: CropArea = {
             x: 0,
             y: 0,
-            width: dimensions.width,
-            height: dimensions.height,
-            dpr: dimensions.dpr,
-            pageUrl: dimensions.url
+            width: pageInfo.width,
+            height: pageInfo.height,
+            dpr: pageInfo.dpr,
+            pageUrl: pageInfo.url,
+            pageDomain: pageInfo.domain,
+            pageTitle: pageInfo.title,
+            pageDescription: pageInfo.description,
+            timestamp: pageInfo.timestamp,
+            viewport: {
+              width: pageInfo.width,
+              height: pageInfo.height
+            }
           };
           
           // Process the cropped image and attach it to the message input
           cropImage(dataUrl, fullCropArea).then(croppedImage => {
-            attachedImage = croppedImage;
-            cropAreaInfo = fullCropArea;
+            if (isBatchMode) {
+              // Add to batch instead of attaching directly
+              addToBatch(croppedImage, fullCropArea);
+            } else {
+              attachedImage = croppedImage;
+              cropAreaInfo = fullCropArea;
+            }
           }).catch(error => {
             console.error('Error processing screenshot:', error);
             errorMessage = `Screenshot processing error: ${error instanceof Error ? error.message : String(error)}`;
@@ -315,15 +358,22 @@
       if (msgEvent.imageData && msgEvent.cropArea) {
         // Instead of processing with a prompt, just attach it to the input
         cropImage(msgEvent.imageData, msgEvent.cropArea).then(croppedImage => {
-          attachedImage = croppedImage;
-          cropAreaInfo = msgEvent.cropArea || null;
-          
+          if (isBatchMode) {
+            // Add to batch instead of attaching directly
+            addToBatch(croppedImage, msgEvent.cropArea || {
+              x: 0, y: 0, width: 0, height: 0, dpr: 1
+            });
+          } else {
+            attachedImage = croppedImage;
+            cropAreaInfo = msgEvent.cropArea || null;
+          }
+
           // If a prompt was provided with the screenshot, put it in the message input
           if (msgEvent.prompt) {
             // Set the message input field with the prompt that came with the screenshot
             message = msgEvent.prompt;
           }
-          
+
           // Ensure the UI is updated
           setTimeout(() => {
             console.log('Screenshot attached, ready for chat');
@@ -348,6 +398,113 @@
   function removeAttachedImage() {
     attachedImage = null;
     cropAreaInfo = null;
+  }
+
+  // Batch processing functions
+  function toggleBatchMode() {
+    isBatchMode = !isBatchMode;
+    if (!isBatchMode) {
+      batchImages = [];
+    }
+  }
+
+  function addToBatch(imageData: string, cropArea: CropArea) {
+    const batchImage: BatchImage = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      imageData,
+      cropArea
+    };
+
+    batchImages = [...batchImages, batchImage];
+  }
+
+  function removeBatchImage(imageId: string) {
+    batchImages = batchImages.filter(img => img.id !== imageId);
+  }
+
+  async function processBatchImages() {
+    if (batchImages.length === 0) return;
+
+    // Check if API key is available
+    if (!$settings.apiKey) {
+      errorMessage = "Please set your API key in Settings first";
+      return;
+    }
+
+    const promptText = message.trim() || "Analyze these images and provide insights.";
+
+    // Build context with all images and their OCR results
+    let contextText = promptText;
+
+    // Add batch context
+    contextText += `\n\n**Batch Analysis of ${batchImages.length} Images:**`;
+
+    batchImages.forEach((img, index) => {
+      contextText += `\n\n**Image ${index + 1}:**`;
+
+      if (img.cropArea.pageTitle) {
+        contextText += `\nPage: ${img.cropArea.pageTitle}`;
+      }
+      if (img.cropArea.pageUrl) {
+        contextText += `\nURL: ${img.cropArea.pageUrl}`;
+      }
+    });
+
+    // Create message with all images
+    const contentParts: ContentPart[] = [
+      {
+        type: 'text',
+        text: contextText
+      }
+    ];
+
+    // Add all images
+    batchImages.forEach(img => {
+      contentParts.push({
+        type: 'image_url',
+        image_url: {
+          url: img.imageData
+        }
+      });
+    });
+
+    const userMessage: Message = {
+      role: 'user',
+      content: contentParts
+    };
+
+    messages = [...messages, userMessage];
+    message = "";
+    isLoading = true;
+    errorMessage = "";
+
+    // Clear batch after sending
+    batchImages = [];
+    isBatchMode = false;
+
+    try {
+      // Send message to Groq API
+      const messagesForAPI = messages.filter(msg => msg.role === 'user' || msg.role === 'assistant');
+      const response = await sendChatRequest(messagesForAPI);
+
+      if (response.error) {
+        errorMessage = response.error;
+        return;
+      }
+
+      // Add AI response to the chat
+      const aiResponse: Message = {
+        role: 'assistant',
+        content: response.content
+      };
+
+      messages = [...messages, aiResponse];
+    } catch (error) {
+      console.error('Error sending batch message:', error);
+      errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    } finally {
+      isLoading = false;
+    }
   }
   
   function handleAttachedImageMouseEnter() {
@@ -421,19 +578,47 @@
       errorMessage = "Please set your API key in Settings first";
       return;
     }
-    
+
     if (!promptText || !promptText.trim()) {
       // Use a default prompt if none provided
       promptText = "What's in this image?";
     }
-    
+
+    // Build context information if available
+    let contextText = promptText;
+    if (cropAreaInfo) {
+      const contextParts = [];
+
+      if (cropAreaInfo.pageTitle) {
+        contextParts.push(`Page Title: ${cropAreaInfo.pageTitle}`);
+      }
+
+      if (cropAreaInfo.pageUrl) {
+        contextParts.push(`URL: ${cropAreaInfo.pageUrl}`);
+      }
+
+      if (cropAreaInfo.pageDomain) {
+        contextParts.push(`Domain: ${cropAreaInfo.pageDomain}`);
+      }
+
+      if (cropAreaInfo.pageDescription) {
+        contextParts.push(`Page Description: ${cropAreaInfo.pageDescription}`);
+      }
+
+      if (contextParts.length > 0) {
+        contextText = `${promptText}\n\n**Page Context:**\n${contextParts.join('\n')}`;
+      }
+    }
+
+
+
     // Add the screenshot and query as a message
     const userMessage: Message = {
       role: 'user',
       content: [
         {
           type: 'text',
-          text: promptText
+          text: contextText
         },
         {
           type: 'image_url',
@@ -490,7 +675,74 @@
 
   onMount(() => {
     scrollToBottom();
+    setupKeyboardShortcuts();
   });
+
+  onDestroy(() => {
+    keyboardShortcuts.stopListening();
+  });
+
+  function setupKeyboardShortcuts() {
+    // Register keyboard shortcuts
+    const shortcuts: ShortcutAction[] = [
+      {
+        ...DEFAULT_SHORTCUTS.TAKE_SCREENSHOT,
+        action: () => {
+          if (!isLoading && !attachedImage) {
+            directCaptureScreenshot();
+          }
+        }
+      },
+      {
+        ...DEFAULT_SHORTCUTS.SELECT_REGION,
+        action: () => {
+          if (!isLoading && !attachedImage) {
+            captureSelectedRegion();
+          }
+        }
+      },
+      {
+        ...DEFAULT_SHORTCUTS.NEW_CHAT,
+        action: () => {
+          startNewChat();
+        }
+      },
+      {
+        ...DEFAULT_SHORTCUTS.FOCUS_INPUT,
+        action: () => {
+          if (messageInput) {
+            messageInput.focus();
+          }
+        }
+      },
+      {
+        ...DEFAULT_SHORTCUTS.ESCAPE,
+        action: () => {
+          if (attachedImage) {
+            removeAttachedImage();
+          } else if (isBatchMode) {
+            toggleBatchMode();
+          }
+        }
+      },
+      {
+        key: 'b',
+        ctrlKey: true,
+        description: 'Toggle batch mode',
+        action: () => {
+          toggleBatchMode();
+        }
+      }
+    ];
+
+    // Register all shortcuts
+    shortcuts.forEach(shortcut => {
+      keyboardShortcuts.register(shortcut);
+    });
+
+    // Start listening
+    keyboardShortcuts.startListening();
+  }
   
   function scrollToBottom() {
     if (chatContainer && chatContainer.scrollHeight) {
@@ -546,9 +798,54 @@
     >
       {#if messages.length === 0}
         <div class="flex items-center justify-center h-full">
-          <div class="text-center text-gray-500 dark:text-gray-400">
-            <p>Start a new conversation</p>
-            <p class="text-sm mt-2">Your messages will appear here</p>
+          <div class="text-center text-gray-500 dark:text-gray-400 max-w-md">
+            <div class="mb-6">
+              <p class="text-lg font-medium">Start a new conversation</p>
+              <p class="text-sm mt-2">Your messages will appear here</p>
+            </div>
+
+            <!-- Keyboard Shortcuts -->
+            <div class="text-left bg-gray-50 dark:bg-gray-800 rounded-lg p-4 mt-4">
+              <h3 class="text-sm font-semibold mb-3 text-gray-700 dark:text-gray-300">⌨️ Keyboard Shortcuts</h3>
+              <div class="space-y-2 text-xs">
+                <div class="flex justify-between items-center">
+                  <span>Take screenshot</span>
+                  <kbd class="px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-xs">Ctrl+S</kbd>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span>Select region</span>
+                  <kbd class="px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-xs">Ctrl+Shift+S</kbd>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span>New chat</span>
+                  <kbd class="px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-xs">Ctrl+N</kbd>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span>Batch mode</span>
+                  <kbd class="px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-xs">Ctrl+B</kbd>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span>Focus input</span>
+                  <kbd class="px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-xs">/</kbd>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span>Send message</span>
+                  <kbd class="px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-xs">Enter</kbd>
+                </div>
+              </div>
+            </div>
+
+            <!-- Features -->
+            <div class="text-left bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 mt-4">
+              <h3 class="text-sm font-semibold mb-3 text-blue-700 dark:text-blue-300">✨ Features</h3>
+              <div class="space-y-1 text-xs text-blue-600 dark:text-blue-400">
+                <div>📸 Full page & region screenshots</div>
+                <div>🔄 Batch image processing</div>
+                <div>🌐 Automatic page context</div>
+                <div>📝 Markdown formatted responses</div>
+                <div>⚡ Fast AI inference with Groq</div>
+              </div>
+            </div>
           </div>
         </div>
       {:else}
@@ -556,11 +853,21 @@
           <div class="mb-4 flex {msg.role === 'user' ? 'justify-end' : 'justify-start'}">
             <div class="{msg.role === 'user' ? 'bg-logo-purple dark:bg-logo-purple text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white'} rounded-xl p-3 max-w-[80%] break-words">
               {#if typeof msg.content === 'string'}
-                {msg.content}
+                {#if msg.role === 'assistant'}
+                  <MarkdownRenderer content={msg.content} />
+                {:else}
+                  {msg.content}
+                {/if}
               {:else}
                 {#each msg.content as contentPart}
                   {#if contentPart.type === 'text'}
-                    <div>{contentPart.text}</div>
+                    <div>
+                      {#if msg.role === 'assistant'}
+                        <MarkdownRenderer content={contentPart.text} />
+                      {:else}
+                        {contentPart.text}
+                      {/if}
+                    </div>
                   {:else if contentPart.type === 'image_url'}
                     <div class="mt-2">
                       <img src={contentPart.image_url.url} alt="Screenshot" class="rounded-lg max-w-full max-h-64" />
@@ -597,12 +904,61 @@
     
     <!-- Fixed Chat Input - Fixed positioning to ensure visibility -->
     <div class="absolute bottom-0 left-0 right-0 p-3 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-md z-10">
+
+      <!-- Batch Mode Toggle -->
+      <div class="mb-2 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <button
+            class="text-xs px-2 py-1 rounded {isBatchMode ? 'bg-logo-purple text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'} hover:opacity-80 transition"
+            onclick={toggleBatchMode}
+            title="Toggle batch mode to capture multiple screenshots"
+          >
+            {isBatchMode ? '📸 Batch Mode ON' : '📸 Batch Mode'}
+          </button>
+
+          {#if isBatchMode && batchImages.length > 0}
+            <span class="text-xs text-gray-600 dark:text-gray-400">
+              {batchImages.length} image{batchImages.length !== 1 ? 's' : ''} captured
+            </span>
+
+            <button
+              class="text-xs px-2 py-1 bg-logo-purple text-white rounded hover:bg-logo-purple/90 transition"
+              onclick={processBatchImages}
+              disabled={isLoading}
+            >
+              Analyze Batch
+            </button>
+          {/if}
+        </div>
+
+      </div>
+
+      <!-- Batch Images Preview -->
+      {#if isBatchMode && batchImages.length > 0}
+        <div class="mb-2 flex gap-2 overflow-x-auto pb-2">
+          {#each batchImages as batchImg}
+            <div class="relative flex-shrink-0">
+              <img src={batchImg.imageData} alt="Batch screenshot" class="h-12 w-16 object-cover rounded border" />
+
+              <!-- Remove button -->
+              <button
+                class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs hover:bg-red-600"
+                onclick={() => removeBatchImage(batchImg.id)}
+              >
+                ×
+              </button>
+            </div>
+          {/each}
+        </div>
+      {/if}
       <!-- Attached Image Preview -->
       {#if attachedImage}
-        <div 
+        <div
           class="relative mb-2 inline-block"
           onmouseenter={handleAttachedImageMouseEnter}
           onmouseleave={handleAttachedImageMouseLeave}
+          role="button"
+          tabindex="0"
         >
           <div class="relative bg-gray-200 dark:bg-gray-700 rounded-lg p-1 inline-flex items-center">
             <img src={attachedImage} alt="Attached screenshot" class="h-16 rounded-lg object-contain" />
@@ -625,11 +981,12 @@
       {/if}
       
       <div class="flex gap-2 items-center">
-        <input 
-          type="text" 
+        <input
+          type="text"
           class="flex-1 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           placeholder={attachedImage ? "Ask about this image..." : "Type your message..."}
           bind:value={message}
+          bind:this={messageInput}
           onkeydown={handleKeyDown}
           disabled={isLoading}
         />
@@ -662,11 +1019,11 @@
         </button>
         
         <!-- Send Button -->
-        <button 
+        <button
           class="bg-logo-purple dark:bg-logo-purple text-white p-2 rounded-full hover:bg-logo-purple/90 dark:hover:bg-logo-purple/90 transition disabled:opacity-50 disabled:cursor-not-allowed"
-          onclick={sendMessage}
-          disabled={(message.trim() === "" && !attachedImage) || isLoading}
-          aria-label="Send message"
+          onclick={isBatchMode && batchImages.length > 0 ? processBatchImages : sendMessage}
+          disabled={(message.trim() === "" && !attachedImage && batchImages.length === 0) || isLoading}
+          aria-label={isBatchMode && batchImages.length > 0 ? "Analyze batch images" : "Send message"}
         >
           {#if isLoading}
             <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

@@ -1,8 +1,8 @@
-# ClipChat - Llama 4 Multi-Modal Chrome Extension
+# Xipchat - Llama 4 Multi-Modal Chrome Extension
 
 **Chrome extension with Llama 4 multi-modal AI via Groq's fast inference. Chat with AI and analyze webpages directly in your browser.**
 
-![clipchat demo](clipchat.gif)
+![xipchat demo](xipchat.gif)
 
 ## Overview
 
@@ -12,8 +12,12 @@ The extension opens as a chat interface in Chrome's side panel, but its true pow
 
 **Key Features:**
 
-- Multi-Modal AI powered by Llama 4 Maverick and Scout models for text and image understanding
+- **Multi-Modal AI** powered by Llama 4 Maverick and Scout models for text and image understanding
 - **Visual Analysis**: Select regions or capture full-page screenshots for AI-powered image analysis
+- **Batch Processing**: Capture and analyze multiple screenshots simultaneously for comprehensive workflows
+- **Smart Context**: Automatic page metadata integration (title, URL, domain) for enhanced AI understanding
+- **Markdown Responses**: Beautifully formatted AI responses with code blocks, tables, and rich text
+- **Power User Shortcuts**: Comprehensive keyboard shortcuts for lightning-fast workflow
 - **Contextual Chat**: Ask questions about visual content with full context awareness
 - Sub-second response times with Groq Fast AI Inference acceleration
 
@@ -23,8 +27,8 @@ The extension opens as a chat interface in Chrome's side panel, but its true pow
 
 1. **Download the Latest Release**
 
-   - Go to the [Releases section](https://github.com/benank/groq-clipchat-template/releases) of this repository
-   - Download the latest `clipchat-extension.zip` file
+   - Go to the [Releases section](https://github.com/xeven777/xipchat/releases) of this repository
+   - Download the latest `xipchat-extension.zip` file
    - Extract the ZIP file to a folder on your computer
 
 2. **Load the Unpacked Extension**
@@ -33,12 +37,52 @@ The extension opens as a chat interface in Chrome's side panel, but its true pow
    - Enable **Developer Mode** (toggle in the top-right corner)
    - Click **Load unpacked** and select the extracted folder
 
-3. **Start Using ClipChat**
-   - Click the ClipChat extension icon in your Chrome toolbar
+3. **Start Using xipchat**
+   - Click the xipchat extension icon in your Chrome toolbar
    - Enter your [Groq API key](https://console.groq.com/keys) in the settings
    - Begin chatting with Llama 4 and analyzing webpage content!
 
 **No coding required** - just download, load, and start exploring the power of multi-modal AI in your browser.
+
+## ✨ New Features & Enhancements
+
+### **🚀 Productivity Features**
+
+- **⌨️ Keyboard Shortcuts**: Lightning-fast workflow with comprehensive shortcuts
+
+  - `Ctrl+S` - Take full page screenshot
+  - `Ctrl+Shift+S` - Select region for screenshot
+  - `Ctrl+N` - Start new chat
+  - `Ctrl+B` - Toggle batch mode
+  - `/` - Focus message input
+  - `Enter` - Send message
+  - `Escape` - Cancel current action
+
+- **📸 Batch Screenshot Processing**: Capture multiple screenshots and analyze them together
+  - Queue multiple screenshots for comprehensive analysis
+  - Visual preview of all captured images
+  - Perfect for analyzing user flows, comparing designs, or processing workflows
+
+### **🧠 Enhanced AI Intelligence**
+
+- **🌐 Smart Page Context**: Automatically includes page metadata with every screenshot
+
+  - Page title, URL, domain, and description
+  - Enhanced AI understanding of what it's analyzing
+  - More relevant and accurate responses
+
+- **📝 Markdown Formatted Responses**: Professional-quality AI responses
+  - Code blocks with syntax highlighting
+  - Tables, lists, and structured content
+  - Links, headings, and rich text formatting
+  - Copy-friendly code snippets
+
+### **💡 User Experience Improvements**
+
+- **🎯 Interactive Welcome Screen**: Helpful shortcuts and features guide
+- **⚡ Optimized Performance**: Faster loading and reduced bundle size
+- **♿ Accessibility**: Improved keyboard navigation and screen reader support
+- **🎨 Visual Feedback**: Clear indicators for batch mode and processing states
 
 ## Architecture
 
@@ -95,9 +139,38 @@ The extension opens as a chat interface in Chrome's side panel, but its true pow
    - Click **Load unpacked** and select the `dist/` folder
 
 5. **Configure API Key**
-   - Click the ClipChat extension icon in Chrome toolbar
+   - Click the xipchat extension icon in Chrome toolbar
    - Enter your [Groq API key](https://console.groq.com/keys) in the settings
    - Start chatting with Llama 4 models!
+
+## 🚀 How to Use New Features
+
+### **Keyboard Shortcuts**
+
+- **Quick Screenshots**: Press `Ctrl+S` for instant full-page capture or `Ctrl+Shift+S` for region selection
+- **Fast Navigation**: Use `Ctrl+N` for new chat, `/` to focus input, `Enter` to send
+- **Batch Mode**: Toggle with `Ctrl+B` to capture multiple screenshots
+
+### **Batch Processing Workflow**
+
+1. **Enable Batch Mode**: Click the "📸 Batch Mode" button or press `Ctrl+B`
+2. **Capture Multiple Screenshots**: Take screenshots normally - they'll be added to the batch queue
+3. **Review Your Batch**: See thumbnail previews of all captured images
+4. **Analyze Together**: Click "Analyze Batch" to send all images for comprehensive analysis
+5. **Exit Batch Mode**: Press `Escape` or click the batch toggle to return to single-image mode
+
+### **Smart Context Features**
+
+- **Automatic Context**: Page title, URL, and metadata are automatically included with screenshots
+- **Enhanced Responses**: AI receives rich context about what it's analyzing for better accuracy
+- **Markdown Formatting**: AI responses include formatted code, tables, and structured content
+
+### **Power User Tips**
+
+- Use batch mode for analyzing user flows across multiple pages
+- Combine region selection with batch processing for detailed UI analysis
+- Leverage keyboard shortcuts for 10x faster workflow
+- The welcome screen shows all available shortcuts and features
 
 ## Project Structure
 
@@ -108,8 +181,8 @@ The extension opens as a chat interface in Chrome's side panel, but its true pow
 │   ├── background/         # Background scripts for Chrome extension functionality
 │   ├── content-script/     # Content scripts for injecting into web pages
 │   ├── lib/                # Reusable components, services, stores and types
-│   │   ├── components/     # UI components (ThemeToggle, MainContent, Settings)
-│   │   ├── services/       # Service implementations (Groq API)
+│   │   ├── components/     # UI components (MainContent, Settings, MarkdownRenderer)
+│   │   ├── services/       # Service implementations (Groq API, Keyboard Shortcuts)
 │   │   ├── stores/         # State management (theme, settings)
 │   │   └── types/          # TypeScript interfaces and type definitions
 │   ├── App.svelte          # Main application component
@@ -135,13 +208,13 @@ The **manifest.json** file is located in the `public/` directory and defines the
 ```json
 {
   "manifest_version": 3,
-  "name": "ClipChat - Llama4 + Groq",
+  "name": "xipchat - Llama4 + Groq",
   "version": "1.0.0",
   "description": "A side panel Chrome extension for chatting with Llama4 multi-modal, accelerated by Groq | Fast AI Inference",
   "permissions": ["sidePanel", "storage", "activeTab", "scripting", "tabs"],
   "host_permissions": ["<all_urls>"],
   "action": {
-    "default_title": "Open ClipChat",
+    "default_title": "Open XipChat",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
@@ -177,23 +250,10 @@ The **manifest.json** file is located in the `public/` directory and defines the
 - **TailwindCSS**: Highly customizable utility classes for rapid UI design
 - **DaisyUI**: Prebuilt Tailwind components for a polished design
 
-**Customizing Tailwind:**
-Edit the `tailwind.config.js` file to add your themes, colors, or plugins.
-
-```javascript
-module.exports = {
-  content: ["./src/**/*.{html,js,svelte,ts}"],
-  theme: {
-    extend: {},
-  },
-  plugins: [require("daisyui")],
-};
-```
-
 ## Development Scripts
 
-- **`pnpm run dev`**: Start the development server with HMR
-- **`pnpm run build`**: Build the extension for production
+- **`bun run dev`**: Start the development server with HMR
+- **`bun run build`**: Build the extension for production
 
 ## Customization
 
@@ -231,11 +291,14 @@ This template is designed to be a foundation for you to get started with. Key ar
 
 ### **Advanced Extensions**
 
-- **OCR Integration:** Text extraction from images before AI analysis
-- **Batch Processing:** Multiple screenshot analysis, automated workflows
+- **✅ Batch Processing:** Multiple screenshot analysis, automated workflows (IMPLEMENTED)
+- **✅ Smart Context Integration:** Automatic page metadata inclusion (IMPLEMENTED)
+- **✅ Markdown Rendering:** Rich text formatting for AI responses (IMPLEMENTED)
+- **✅ Keyboard Shortcuts:** Power user workflow optimization (IMPLEMENTED)
 - **Export Features:** PDF reports, integration APIs (Slack, Notion, Jira)
 - **Custom Templates:** Industry-specific prompts, analytics dashboard
 - **Collaboration:** Share results, team management, usage tracking
+- **OCR Integration:** Text extraction from images before AI analysis
 
 ## Next Steps
 
@@ -245,11 +308,6 @@ This template is designed to be a foundation for you to get started with. Key ar
 - **Build and customize:** Fork this repo and start customizing to build out your own Chrome extension with AI capabilities
 - **Explore Chrome Extension APIs:** Learn more about [Chrome Extension development](https://developer.chrome.com/docs/extensions/) to add advanced features
 - **Get support:** Connect with other developers building on Groq, chat with our team, and submit feature requests on our [Groq Developer Forum](https://community.groq.com)
-
-### For Founders and Business Leaders
-
-- **See enterprise capabilities:** This template showcases production-ready AI that can handle realtime business workloads in browser extensions
-- **Discuss your needs:** [Contact our team](https://groq.com/enterprise-access/) to explore how Groq can accelerate your AI initiatives and browser-based applications
 
 ## Security Notes
 
@@ -267,8 +325,6 @@ This template is designed to be a foundation for you to get started with. Key ar
 - [Chrome Extension Docs](https://developer.chrome.com/docs/extensions/)
 - [TailwindCSS Documentation](https://tailwindcss.com/docs)
 - [DaisyUI Documentation](https://daisyui.com/)
-
-
 
 ## License
 

@@ -1,20 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "ClipChat - Llama4 + Groq",
+  "name": "XipChat - Llama4",
   "version": "1.0.0",
-  "description": "A side panel Chrome extension for chatting with Llama4 multi-modal, accelerated by Groq | Fast AI Inference",
-  "permissions": [
-    "sidePanel",
-    "storage",
-    "activeTab",
-    "scripting",
-    "tabs"
-  ],
-  "host_permissions": [
-    "<all_urls>"
-  ],
+  "description": "A side panel Chrome extension for chatting with Llama4 multi-modal",
+  "permissions": ["sidePanel", "storage", "activeTab", "scripting", "tabs"],
+  "host_permissions": ["<all_urls>"],
   "action": {
-    "default_title": "Open ClipChat",
+    "default_title": "Open XipChat",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
