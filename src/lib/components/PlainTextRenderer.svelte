@@ -8,8 +8,6 @@
   let { content }: Props = $props();
   let renderedText = $state('');
 
-
-
   // Function to safely convert any content to a readable string
   function safeStringify(content: any): string {
     if (content === null || content === undefined) {

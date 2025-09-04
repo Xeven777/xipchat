@@ -10,15 +10,86 @@
     type: 'text';
     text: string;
   };
-  
+
   type ImageContent = {
     type: 'image_url';
     image_url: {
       url: string;
     };
   };
-  
+
   type ContentPart = TextContent | ImageContent;
+
+  // Function to safely convert any content to a readable string
+  function safeStringify(content: any): string {
+    if (content === null || content === undefined) {
+      return '';
+    }
+
+    if (typeof content === 'string') {
+      return content;
+    }
+
+    if (typeof content === 'number' || typeof content === 'boolean') {
+      return String(content);
+    }
+
+    if (typeof content === 'object') {
+      try {
+        // If it's an array, join the elements
+        if (Array.isArray(content)) {
+          return content.map(item => safeStringify(item)).join('');
+        }
+
+        // If it has a text property, use that
+        if (content.text && typeof content.text === 'string') {
+          return content.text;
+        }
+
+        // If it has a content property, use that
+        if (content.content && typeof content.content === 'string') {
+          return content.content;
+        }
+
+        // If it has a message property, use that
+        if (content.message && typeof content.message === 'string') {
+          return content.message;
+        }
+
+        // If it has innerHTML or outerHTML (for DOM elements), use that
+        if (content.innerHTML && typeof content.innerHTML === 'string') {
+          return content.innerHTML;
+        }
+
+        // If it has a raw property (common in marked.js tokens), use that
+        if (content.raw && typeof content.raw === 'string') {
+          return content.raw;
+        }
+
+        // If it has a value property, use that
+        if (content.value && typeof content.value === 'string') {
+          return content.value;
+        }
+
+        // For objects with only primitive values, try to extract meaningful text
+        const values = Object.values(content).filter(v =>
+          typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean'
+        );
+        if (values.length > 0) {
+          return values.map(v => String(v)).join(' ');
+        }
+
+        // Try to format as readable JSON as last resort
+        return JSON.stringify(content, null, 2);
+      } catch (e) {
+        console.warn('Error stringifying object:', e);
+        return 'Unable to display content';
+      }
+    }
+
+    // Fallback for any other type
+    return String(content);
+  }
 
   // Chrome extension API type declarations
   interface ChromeRuntime {
@@ -856,24 +927,38 @@
                 {#if msg.role === 'assistant'}
                   <MarkdownRenderer content={msg.content} />
                 {:else}
-                  {msg.content}
+                  {safeStringify(msg.content)}
                 {/if}
-              {:else}
+              {:else if Array.isArray(msg.content)}
                 {#each msg.content as contentPart}
-                  {#if contentPart.type === 'text'}
+                  {#if contentPart && contentPart.type === 'text'}
                     <div>
                       {#if msg.role === 'assistant'}
-                        <MarkdownRenderer content={contentPart.text} />
+                        <MarkdownRenderer content={safeStringify(contentPart.text)} />
                       {:else}
-                        {contentPart.text}
+                        {safeStringify(contentPart.text)}
                       {/if}
                     </div>
-                  {:else if contentPart.type === 'image_url'}
+                  {:else if contentPart && contentPart.type === 'image_url' && contentPart.image_url && contentPart.image_url.url}
                     <div class="mt-2">
                       <img src={contentPart.image_url.url} alt="Screenshot" class="rounded-lg max-w-full max-h-64" />
                     </div>
+                  {:else}
+                    <!-- Fallback for unknown content part types -->
+                    <div class="text-sm opacity-75">
+                      {safeStringify(contentPart)}
+                    </div>
                   {/if}
                 {/each}
+              {:else}
+                <!-- Fallback for non-string, non-array content -->
+                <div>
+                  {#if msg.role === 'assistant'}
+                    <MarkdownRenderer content={safeStringify(msg.content)} />
+                  {:else}
+                    {safeStringify(msg.content)}
+                  {/if}
+                </div>
               {/if}
             </div>
           </div>

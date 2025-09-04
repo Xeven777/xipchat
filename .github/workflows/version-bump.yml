@@ -1,0 +1,114 @@
+name: Version Bump
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
+      custom_version:
+        description: 'Custom version (optional, overrides version_type)'
+        required: false
+        type: string
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Configure git
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+    - name: Get current version
+      id: current_version
+      run: |
+        CURRENT=$(node -p "require('./package.json').version")
+        echo "current=$CURRENT" >> $GITHUB_OUTPUT
+        
+    - name: Calculate new version
+      id: new_version
+      run: |
+        if [ -n "${{ github.event.inputs.custom_version }}" ]; then
+          NEW_VERSION="${{ github.event.inputs.custom_version }}"
+        else
+          CURRENT="${{ steps.current_version.outputs.current }}"
+          IFS='.' read -ra VERSION_PARTS <<< "$CURRENT"
+          MAJOR=${VERSION_PARTS[0]}
+          MINOR=${VERSION_PARTS[1]}
+          PATCH=${VERSION_PARTS[2]}
+          
+          case "${{ github.event.inputs.version_type }}" in
+            "major")
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            "minor")
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            "patch")
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+          
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+        fi
+        
+        echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+        
+    - name: Update package.json
+      run: |
+        npm version ${{ steps.new_version.outputs.version }} --no-git-tag-version
+        
+    - name: Update manifest.json
+      run: |
+        node -e "
+          const fs = require('fs');
+          const manifest = JSON.parse(fs.readFileSync('public/manifest.json', 'utf8'));
+          manifest.version = '${{ steps.new_version.outputs.version }}';
+          fs.writeFileSync('public/manifest.json', JSON.stringify(manifest, null, 2) + '\n');
+        "
+        
+    - name: Commit changes
+      run: |
+        git add package.json package-lock.json public/manifest.json
+        git commit -m "🔖 Bump version to v${{ steps.new_version.outputs.version }}"
+        git tag "v${{ steps.new_version.outputs.version }}"
+        
+    - name: Push changes
+      run: |
+        git push origin main
+        git push origin "v${{ steps.new_version.outputs.version }}"
+        
+    - name: Create release notes
+      run: |
+        echo "## 🎉 Version ${{ steps.new_version.outputs.version }} Released!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Previous version:** ${{ steps.current_version.outputs.current }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **New version:** ${{ steps.new_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Bump type:** ${{ github.event.inputs.version_type }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "The build and release workflow will automatically trigger and create a new release." >> $GITHUB_STEP_SUMMARY
