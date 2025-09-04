@@ -63,13 +63,4 @@
       <Settings />
     </div>
   </main>
-
-  <!-- Footer -->
-  <footer class="py-1 text-center bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-    <img 
-      src={$theme === 'dark' ? '/icons/groqlabs_logo-white-oran.png' : '/icons/groqlabs_logo.png'} 
-      alt="GroqLabs Logo" 
-      class="h-5 mx-auto" 
-    />
-  </footer>
 </div>
