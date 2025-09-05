@@ -99,7 +99,7 @@ jobs:
 
       - name: Commit changes
         run: |
-          git add package.json bun.lockb public/manifest.json
+          git add package.json bun.lock public/manifest.json
           git commit -m "🔖 Bump version to v${{ steps.new_version.outputs.version }}"
           git tag "v${{ steps.new_version.outputs.version }}"
 
