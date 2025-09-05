@@ -1,10 +1,18 @@
 {
   "manifest_version": 3,
   "name": "XipChat - Llama4",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A side panel Chrome extension for chatting with Llama4 multi-modal",
-  "permissions": ["sidePanel", "storage", "activeTab", "scripting", "tabs"],
-  "host_permissions": ["<all_urls>"],
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "activeTab",
+    "scripting",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "action": {
     "default_title": "Open XipChat",
     "default_icon": {
@@ -25,8 +33,12 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content-script.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content-script.js"
+      ],
       "run_at": "document_idle"
     }
   ],
