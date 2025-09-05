@@ -108,6 +108,20 @@ jobs:
           git push origin main
           git push origin "v${{ steps.new_version.outputs.version }}"
 
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        with:
+          tag_name: "v${{ steps.new_version.outputs.version }}"
+          release_name: "v${{ steps.new_version.outputs.version }}"
+          body: |
+            ## 🎉 Version ${{ steps.new_version.outputs.version }} Released!
+
+            - **Previous version:** ${{ steps.current_version.outputs.current }}
+            - **New version:** ${{ steps.new_version.outputs.version }}
+            - **Bump type:** ${{ github.event.inputs.version_type }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Create release notes
         run: |
           echo "## 🎉 Version ${{ steps.new_version.outputs.version }} Released!" >> $GITHUB_STEP_SUMMARY
