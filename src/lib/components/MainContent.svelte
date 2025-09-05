@@ -824,6 +824,46 @@
       }, 0);
     }
   }
+
+  // Copy message content to clipboard
+  async function copyToClipboard(content: string | ContentPart[]) {
+    try {
+      let textToCopy = '';
+      
+      if (typeof content === 'string') {
+        textToCopy = content;
+      } else if (Array.isArray(content)) {
+        // Extract text from content parts
+        const textParts = content
+          .filter(part => part && part.type === 'text')
+          .map(part => part.text)
+          .join('\n');
+        textToCopy = textParts;
+      } else {
+        textToCopy = safeStringify(content);
+      }
+
+      await navigator.clipboard.writeText(textToCopy);
+      
+      // You could add a toast notification here if desired
+      console.log('Copied to clipboard');
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+      
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = typeof content === 'string' ? content : safeStringify(content);
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        console.log('Copied to clipboard (fallback)');
+      } catch (fallbackErr) {
+        console.error('Fallback copy failed: ', fallbackErr);
+      }
+      document.body.removeChild(textArea);
+    }
+  }
   
   $effect(() => {
     // Auto-scroll when messages change
@@ -922,7 +962,7 @@
       {:else}
         {#each messages as msg}
           <div class="mb-4 flex {msg.role === 'user' ? 'justify-end' : 'justify-start'}">
-            <div class="{msg.role === 'user' ? 'bg-logo-purple dark:bg-logo-purple text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white'} rounded-xl p-3 max-w-[80%] break-words">
+            <div class="relative group {msg.role === 'user' ? 'bg-logo-purple dark:bg-logo-purple text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white'} rounded-xl p-3 max-w-[80%] break-words">
               {#if typeof msg.content === 'string'}
                 {#if msg.role === 'assistant'}
                   <MarkdownRenderer content={msg.content} />
@@ -959,6 +999,21 @@
                     {safeStringify(msg.content)}
                   {/if}
                 </div>
+              {/if}
+              
+              <!-- Copy Button - only for assistant messages -->
+              {#if msg.role === 'assistant'}
+                <button
+                  class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                  onclick={() => copyToClipboard(msg.content)}
+                  title="Copy message"
+                  aria-label="Copy message to clipboard"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-500 dark:text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+                    <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+                  </svg>
+                </button>
               {/if}
             </div>
           </div>
